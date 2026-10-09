@@ -1,0 +1,255 @@
+---
+title: " Survival Analysis - Report"
+author: 
+    -  " AMES ODHIAMBO"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+  word_document:
+    toc: true
+    toc_depth: '3'
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+# Survival Analysis Project  - Report
+
+## Section A: Data Exploration & Description
+
+### 1. Dataset Import and Variable Summary
+
+The dataset `survival_data_group1.csv` imported and summarized. 
+
+```{r data_import,warning=FALSE, echo=FALSE}
+# Loading necessary libraries
+library(dplyr)
+library(survival)
+library(survminer)
+
+# Loading the dataset
+SurvivalData <- read.csv("C:\\Users\\user\\Documents\\J.m Doc\\Academic\\4.2\\Survival\\survival_data_group1.csv")
+```
+
+```{r data_summary,echo=FALSE,warning=FALSE}
+library(dplyr)
+# Summarizing only numeric variables (mean, SD, median, range)
+summary_stats <- SurvivalData %>%
+  select_if(is.numeric) %>%  
+  summarise_all(list(mean = mean, sd = sd, median = median, min = min, max = max), na.rm = TRUE)
+
+# Creating a more structured summary table 
+summary_table <- data.frame(
+  Variable = c("id", "time", "status", "age", "sex", "treatment", "comorbidity"),
+  Mean = c(mean(SurvivalData$id), mean(SurvivalData$time), mean(SurvivalData$status), mean(SurvivalData$age), mean(SurvivalData$sex), mean(SurvivalData$treatment), mean(SurvivalData$comorbidity)),
+  SD = c(sd(SurvivalData$id), sd(SurvivalData$time), sd(SurvivalData$status), sd(SurvivalData$age), sd(SurvivalData$sex), sd(SurvivalData$treatment), sd(SurvivalData$comorbidity)),
+  Median = c(median(SurvivalData$id), median(SurvivalData$time), median(SurvivalData$status), median(SurvivalData$age), median(SurvivalData$sex), median(SurvivalData$treatment), median(SurvivalData$comorbidity)),
+  Min = c(min(SurvivalData$id), min(SurvivalData$time), min(SurvivalData$status), min(SurvivalData$age), min(SurvivalData$sex), min(SurvivalData$treatment), min(SurvivalData$comorbidity)),
+  Max = c(max(SurvivalData$id), max(SurvivalData$time), max(SurvivalData$status), max(SurvivalData$age), max(SurvivalData$sex), max(SurvivalData$treatment), max(SurvivalData$comorbidity))
+)
+
+print(summary_table)
+```
+
+### 2. Survival Time Comparison by Treatment Groups
+
+Descriptive statistics for survival time, grouped by treatment. This provides an initial look at how survival times differ between the new treatment and standard care groups.
+
+```{r survival_time_comparison,echo=FALSE,warning=FALSE}
+SurvivalData %>% 
+  group_by(treatment) %>% 
+  summarise(
+    count = n(),
+    mean = mean(time),
+    sd = sd(time),
+    min = min(time),
+    Q1 = quantile(time, 0.25),
+    median = median(time),
+    Q3 = quantile(time, 0.75),
+    max = max(time)
+  ) %>%
+  print()
+```
+
+### 3. Kaplan-Meier Survival Curves
+
+Kaplan-Meier survival curves to visualize survival probabilities over time, stratified by treatment group and sex. These plots help in understanding the survival experience of different patient cohorts.
+
+**Kaplan-Meier Survival Curve by Treatment Group:**
+
+```{r km_treatment_plot, fig.width=10, fig.height=6,echo=FALSE,warning=FALSE}
+# Converting treatment to factor for labeling
+SurvivalData$treatment_f <- factor(SurvivalData$treatment, levels = c(0, 1), labels = c("Standard Care", "New Treatment"))
+
+fit_treatment <- surv_fit(Surv(time, status) ~ treatment_f, data = SurvivalData)
+ggsurvplot(fit_treatment,
+           data = SurvivalData,
+           risk.table = TRUE,
+           pval = TRUE,
+           conf.int = TRUE,
+           xlab = "Time (months)",
+           ylab = "Survival Probability",
+           title = "Kaplan-Meier Survival Curve by Treatment Group",
+           legend.labs = c("Standard Care", "New Treatment"))
+```
+
+**Kaplan-Meier Survival Curve by Sex:**
+
+```{r km_sex_plot, fig.width=10, fig.height=6,echo=FALSE,warning=FALSE}
+# Converting sex to factor for labeling
+SurvivalData$sex_f <- factor(SurvivalData$sex, levels = c(0, 1), labels = c("Female", "Male"))
+
+fit_sex <- surv_fit(Surv(time, status) ~ sex_f, data = SurvivalData)
+ggsurvplot(fit_sex,
+           data = SurvivalData,
+           risk.table = TRUE,
+           pval = TRUE,
+           conf.int = TRUE,
+           xlab = "Time (months)",
+           ylab = "Survival Probability",
+           title = "Kaplan-Meier Survival Curve by Sex",
+           legend.labs = c("Female", "Male"))
+```
+
+## Section B: Survival Model Fitting
+
+### 4. Cox Proportional Hazards Model (Model 1)
+
+A Cox proportional hazards model fitted with `treatment`, `age`, and `sex` as predictors.
+```{r cox_model1,echo=FALSE,warning=FALSE}
+cph_model1 <- coxph(Surv(time, status) ~ treatment + age + sex, data = SurvivalData)
+summary(cph_model1)
+```
+
+### 5. Interpretation of Hazard Ratios (Model 1)
+
+-   **Treatment (Hazard Ratio = `r round(exp(coef(cph_model1)[["treatment"]]), 2)`):** Patients in the new treatment group (treatment=1) have a hazard of an event that is approximately `r round(exp(coef(cph_model1)[["treatment"]]), 2)` times the hazard of those in the standard care group (treatment=0), holding other variables constant. This suggests that the new treatment is associated with a lower risk of event. The p-value (`r format.pval(summary(cph_model1)$coefficients["treatment", "Pr(>|z|)"], digits = 2)`) indicates statistical significance.
+-   **Age (Hazard Ratio = `r round(exp(coef(cph_model1)[["age"]]), 2)`):** For every one-year increase in age, the hazard of an event increases by approximately `r round((exp(coef(cph_model1)[["age"]])-1)*100, 0)`%, holding other variables constant. This effect is not statistically significant (p-value = `r format.pval(summary(cph_model1)$coefficients["age", "Pr(>|z|)"], digits = 2)`).
+-   **Sex (Hazard Ratio = `r round(exp(coef(cph_model1)[["sex"]]), 2)`):** Males (sex=1) have a hazard of an event that is approximately `r round(exp(coef(cph_model1)[["sex"]]), 2)` times the hazard of females (sex=0), holding other variables constant. This suggests a slightly higher risk for males, but it is not statistically significant (p-value = `r format.pval(summary(cph_model1)$coefficients["sex", "Pr(>|z|)"], digits = 2)`).
+
+### 6. Proportional Hazards Assumption Test (Model 1)
+
+The proportional hazards assumption tested for Model 1 using the `cox.zph` function.
+
+```{r cox_zph_model1,echo=FALSE,warning=FALSE}
+ph_test_model1 <- cox.zph(cph_model1)
+print(ph_test_model1)
+```
+
+Interpretation of the `cox.zph` output:
+
+The p-values for `age` and `sex` are `r format.pval(ph_test_model1$table["age", "p"])` and `r format.pval(ph_test_model1$table["sex", "p"])` respectively, which are greater than 0.05, indicating that the proportional hazards assumption holds for these variables. However, the p-value for `treatment` is `r format.pval(ph_test_model1$table["treatment", "p"])`, which is close to the significance level of 0.05.  
+
+### 7. Cox Proportional Hazards Model (Model 2) with Comorbidity
+
+A second Cox model adding `comorbidity` as a predictor.
+
+```{r cox_model2,echo=FALSE,warning=FALSE}
+cph_model2 <- coxph(Surv(time, status) ~ treatment + age + sex + comorbidity, data = SurvivalData)
+summary(cph_model2)
+```
+
+### 8. Model Fit Statistics (AIC, Log-likelihood)
+
+Comparing Model 1 and Model 2:
+
+```{r model_fit_stats,echo=FALSE,warning=FALSE}
+cat(sprintf("Model 1 - AIC: %.2f, Log-likelihood: %.2f\n", cph_model1$aic, cph_model1$loglik[2]))
+cat(sprintf("Model 2 - AIC: %.2f, Log-likelihood: %.2f\n", cph_model2$aic, cph_model2$loglik[2]))
+```
+
+Model 1 has a slightly lower AIC compared to Model 2. A lower AIC generally indicates a better-fitting model. Although Model 2 includes an additional predictor (`comorbidity`), its inclusion does not significantly improve the model fit as indicated by the higher AIC. The log-likelihood values are also very similar, further suggesting that `comorbidity` does not add much explanatory power to the model in this case.
+
+## Section C: Application & Interpretation
+
+### 9. Estimated Probability of Surviving Beyond 12 Months
+
+Using Model 2, the estimated probabilities of surviving beyond 12 months for two specific patient profiles are:
+
+```{r survival_probability_estimation, warning=FALSE,echo=FALSE,warning=FALSE}
+# Loading required packages
+library(rms)  
+
+# Patient 1: A 60-year-old male in the treatment group with 1 comorbidity
+patient1_data <- data.frame(
+  treatment = 1,
+  age = 60,
+  sex = 1,
+  comorbidity = 1
+)
+
+# Predicting survival probability for Patient 1
+surv_prob_patient1 <- survfit(cph_model2, newdata = patient1_data)
+prob_12_months_patient1 <- summary(surv_prob_patient1, times = 12)$surv
+cat(sprintf("Probability of surviving beyond 12 months for Patient 1: %.4f\n", prob_12_months_patient1))
+
+# Patient 2: A 60-year-old female in the control group with 2 comorbidities
+patient2_data <- data.frame(
+  treatment = 0,
+  age = 60,
+  sex = 0,
+  comorbidity = 2
+)
+
+# Predicting survival probability for Patient 2
+surv_prob_patient2 <- survfit(cph_model2, newdata = patient2_data)
+prob_12_months_patient2 <- summary(surv_prob_patient2, times = 12)$surv
+cat(sprintf("Probability of surviving beyond 12 months for Patient 2: %.4f\n", prob_12_months_patient2))
+```
+
+These probabilities suggest that Patient 1 (male, new treatment, 1 comorbidity) has a higher chance of surviving beyond 12 months compared to Patient 2 (female, standard care, 2 comorbidities).
+
+### 10. Investigating Treatment Effect by Sex (Interaction Term)
+
+To investigate whether the effect of treatment differs by sex, an interaction term (`treatment:sex`) was added to the Cox model.
+```{r cox_interaction_model,echo=FALSE,warning=FALSE}
+cph_interaction <- coxph(Surv(time, status) ~ treatment + age + sex + comorbidity + treatment:sex, data = SurvivalData)
+summary(cph_interaction)
+```
+
+The interaction term `treatment:sex` has a p-value of `r format.pval(summary(cph_interaction)$coefficients["treatment:sex", "Pr(>|z|)"], digits = 2)`, which is not statistically significant. This suggests that there is no significant evidence that the effect of treatment on survival differs between males and females in this dataset. The treatment effect appears to be consistent across both sexes.
+
+### 11. Summary of Key Findings and Implications
+
+**Key Findings:**
+
+-   **Treatment Effect:** The new treatment appears to be associated with a lower hazard of an event compared to standard care, indicating a potential benefit in survival. This finding is statistically significant.
+-   **Age and Sex:** Age and sex did not show statistically significant associations with the hazard of an event in the primary models. While males had a slightly higher hazard, this was not significant.
+-   **Comorbidity:** The number of comorbid conditions did not significantly improve the model fit or show a statistically significant association with the hazard of an event when added to the model.
+-   **Proportional Hazards Assumption:** The proportional hazards assumption was largely met, though the `treatment` variable showed a borderline p-value, suggesting a slight deviation. This could be further explored with stratification if needed.
+-   **Treatment-Sex Interaction:** There is no significant evidence to suggest that the effect of the new treatment differs between males and females.
+
+**Implications for Patient Care and Treatment Decisions:**
+
+-   The new treatment shows promise in improving patient survival. Clinicians might consider this new treatment as a viable option for patients, given its association with a reduced hazard of events.
+-   The lack of significant interaction between treatment and sex suggests that the new treatment's benefits are likely applicable to both male and female patients, simplifying treatment guidelines.
+-   While age and comorbidity were not significant predictors in these models, it's important to note that these are general findings. Individual patient factors and clinical judgment should always be considered in treatment decisions.
+-   Further research with larger datasets or specific patient subgroups might be warranted to explore the subtle effects of age and comorbidity, and to confirm the long-term benefits and safety of the new treatment.
+
+## Section D: Conceptual Understanding
+
+### 12. Difference between Hazard Ratio and Risk Ratio
+
+-   **Hazard Ratio (HR):** In survival analysis, the hazard ratio is the ratio of the hazard rates of two groups. The hazard rate is the instantaneous event rate at a given time, conditional on survival up to that time. An HR of 1 means no difference in hazard between groups, an HR > 1 means a higher hazard in the exposed/treatment group, and an HR < 1 means a lower hazard. Hazard ratios are commonly used in Cox proportional hazards models and are interpreted as the relative risk of an event occurring at any given time.
+
+-   **Risk Ratio (RR) / Relative Risk:** The risk ratio is the ratio of the probability of an event occurring in an exposed group to the probability of the event occurring in a non-exposed (control) group over a specified period. It is a measure of association between exposure and outcome in cohort studies. For example, if the risk of disease in an exposed group is 0.1 and in an unexposed group is 0.05, the RR is 0.1/0.05 = 2. Risk ratios are typically used for binary outcomes and do not account for the time to event.
+
+**Key Difference:** The primary difference lies in the time component. A hazard ratio considers the instantaneous risk of an event at any point in time, given survival up to that point, while a risk ratio considers the cumulative probability of an event over a defined period.
+
+### 13. Definition of Censoring and Types
+
+**Censoring** in survival analysis refers to situations where the event of interest (e.g., death, disease recurrence) has not occurred for a subject by the end of the study, or the subject is lost to follow-up, or the study ends before the event occurs. Despite not observing the event, we still have valuable information about the subject's survival time up to the point of censoring.
+
+**Two Types of Censoring with Medical Examples:**
+
+1.  **Right Censoring:** This is the most common type of censoring in survival analysis. It occurs when a subject's event is not observed by the end of the study period. We know the subject survived at least up to their last observation time.
+    *   **Example:** A clinical trial for a new cancer drug lasts for 5 years. A patient is still alive and disease-free at the end of the 5-year study. Their survival time is right-censored at 5 years, as we know they survived at least that long, but we don't know when (or if) their event will occur after that.
+
+2.  **Left Censoring:** This occurs when the event of interest has already occurred for a subject before the start of observation, but we don't know the exact time of the event. We only know that the event happened before a certain time point.
+    *   **Example:** In a study on the age of onset of a genetic disease, researchers recruit participants and ask them if they have already been diagnosed. If a participant reports being diagnosed at age 30, but the study only started collecting data when participants were 35, then the onset time for that participant is left-censored at age 35. We know the event occurred before age 35, but not the exact age.
+
+
