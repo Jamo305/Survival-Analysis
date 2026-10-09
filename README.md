@@ -7,7 +7,7 @@ A survival analysis of a 200-patient dataset, comparing a new treatment with sta
 | File | Description |
 |---|---|
 | `SURV_James_Odhiambo.Rmd` | R Markdown source: all code, analysis, and written interpretation |
-| `Survival_Analysis.pdf` | Knitted report (PDF) |
+| `SURV_analysis.pdf` | Knitted report (PDF) |
 | `survival_data_group1.csv` | Dataset used in the analysis (200 patients) |
 
 ## Data
